@@ -3,38 +3,66 @@ import cors from "cors";
 import session from "express-session";
 import dotenv from "dotenv";
 import authRouter from "./routes/auth.js";
+import employeesRouter from "./routes/employees.js";
+import timetrackingRouter from "./routes/timetracking.js";
+import inventoryRouter from "./routes/inventory.js";
+import financeRouter from "./routes/finance.js";
+import { pool } from "./db/pool.js";
+import { runMigrations } from "./db/migrate.js";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Erlaubte Frontend-Origins. FRONTEND_ORIGIN kann eine Komma-getrennte Liste sein,
+// damit sowohl die finale Domain (zentoralo.com) als auch die Render-Vorschau-URL
+// (zentoralo-frontend.onrender.com) gleichzeitig funktionieren, ohne den Code bei
+// jeder DNS-Umstellung anfassen zu muessen.
+const allowedOrigins = (process.env.FRONTEND_ORIGIN || "http://localhost:5173")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
 app.use(
-    cors({
-          origin: process.env.FRONTEND_ORIGIN || "http://localhost:5173",
-          credentials: true,
-    })
-  );
+  cors({
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS: Origin nicht erlaubt: ${origin}`));
+      }
+    },
+    credentials: true,
+  })
+);
 app.use(express.json());
 app.use(
-    session({
-          secret: process.env.SESSION_SECRET || "dev-secret-change-me",
-          resave: false,
-          saveUninitialized: false,
-          cookie: {
-                  httpOnly: true,
-                  secure: process.env.NODE_ENV === "production",
-                  maxAge: 1000 * 60 * 60 * 24 * 7,
-          },
-    })
-  );
+  session({
+    secret: process.env.SESSION_SECRET || "dev-secret-change-me",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 Tage
+    },
+  })
+);
 
+// Health-Check - fuer Render und fuer schnelle manuelle Verifikation
 app.get("/api/health", (_req, res) => {
-    res.json({ status: "ok", service: "zentoralo-backend" });
+  res.json({ status: "ok", service: "zentoralo-backend" });
 });
 
 app.use("/api/auth", authRouter);
+app.use("/api/employees", employeesRouter);
+app.use("/api/timetracking", timetrackingRouter);
+app.use("/api/inventory", inventoryRouter);
+app.use("/api/finance", financeRouter);
 
-app.listen(PORT, () => {
+runMigrations(pool).finally(() => {
+  app.listen(PORT, () => {
     console.log(`Zentoralo backend listening on port ${PORT}`);
+  });
 });
