@@ -1,0 +1,17 @@
+/* Zentoralo Design-System - 1:1 uebernommen aus der urspruenglichen statischen Demo.
+   Diese Datei absichtlich NICHT veraendern, ohne explizite Design-Freigabe. */
+
+body {
+  font-family: "Plus Jakarta Sans", sans-serif;
+  background-color: #f8fafc;
+  color: #334155;
+  margin: 0;
+}
+
+.premium-transit {
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.sidebar-gradient {
+  background: linear-gradient(180deg, #090d16 0%, #020408 100%);
+}
