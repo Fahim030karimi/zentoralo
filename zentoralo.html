@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zentoralo | Globales Gastro-Cockpit</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; color: #334155; }
+        .premium-transit { transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1); }
+        .sidebar-gradient {
+            background: linear-gradient(180deg, #090d16 0%, #020408 100%);
+        }
+        /* Versteckt Sektionen, die gerade nicht aktiv sind */
+        .page-section { display: none; }
+        .page-section.active { display: block; }
+    </style>
+</head>
+<body class="min-h-screen flex antialiased">
+    <!-- ==========================================
+         SIDEBAR NAVIGATION
+         ========================================== -->
+    <aside class="w-64 fixed h-screen sidebar-gradient flex flex-col justify-between p-6 shadow-2xl z-50">
+        <div>
+            <!-- Logo -->
+            <div class="flex items-center gap-3 mb-10 px-2">
+                <div class="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-xs tracking-wider shadow-md shadow-indigo-500/20">Z</div>
+                <span class="font-bold text-base tracking-tight text-white">zentoralo<span class="text-indigo-400 font-light text-xs ml-0.5">.com</span></span>
+            </div>
+
+            <p class="text-[9px] font-bold tracking-widest text-slate-500 uppercase px-3 mb-4">Navigation</p>
+
+            <nav class="space-y-1">
+                <a href="#" onclick="switchPage('zentrale')" class="nav-item premium-transit flex items-center gap-3.5 text-slate-400 hover:text-white hover:bg-white/5 px-3 py-2.5 rounded-lg text-xs">
+                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h7"></path></svg>
+                    Zentrale
+                </a>
+
+                <a href="#" onclick="switchPage('finanzen')" class="nav-item premium-transit flex items-center gap-3.5 text-slate-400 hover:text-white hover:bg-white/5 px-3 py-2.5 rounded-lg text-xs">
+                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    Finanzen
+                </a>
+                <!-- HAUPTKATEGORIE: STORE -->
+                <div class="space-y-1 pt-2">
+                    <div class="flex items-center gap-3.5 text-slate-400 px-3 py-2 text-xs font-semibold">
+                        <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+                        Store
+                    </div>
+                    <div class="pl-6 space-y-1 mt-1">
+                        <a href="#" onclick="switchPage('personal')" id="nav-personal" class="nav-item block text-[11px] text-slate-400 hover:text-slate-200 py-1.5 px-3 rounded-lg premium-transit">1. Personal</a>
+                        <a href="#" onclick="switchPage('warenwirtschaft')" id="nav-warenwirtschaft" class="nav-item block text-[11px] text-slate-400 hover:text-slate-200 py-1.5 px-3 rounded-lg premium-transit">2. Warenwirtschaft</a>
+                        <a href="#" onclick="switchPage('werkzeuge')" id="nav-werkzeuge" class="nav-item block text-[11px] text-slate-400 hover:text-slate-200 py-1.5 px-3 rounded-lg premium-transit">3. Werkzeuge</a>
+                    </div>
+                </div>
+                <!-- GLOBALE EINSTELLUNGEN -->
+                <div class="pt-4 border-t border-white/5 mt-4">
+                    <a href="#" onclick="switchPage('einstellungen')" id="nav-einstellungen" class="nav-item premium-transit flex items-center gap-3.5 text-slate-400 hover:text-white hover:bg-white/5 px-3 py-2.5 rounded-lg text-xs">
+                        <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                        Einstellungen
+                    </a>
+                </div>
+            </nav>
+        </div>
+    </aside>
+    <!-- ==========================================
+         HAUPTINHALTS-BEREICH
+         ========================================== -->
+    <main class="flex-1 p-8 ml-64 max-w-5xl space-y-6">
+        <!-- FALLBACK SEKTIONEN (ZENTRALE / FINANZEN / PERSONAL / WAWI) -->
+        <div idpage="zentrale" class="page-section space-y-4">
+            <h1 class="text-xl font-bold text-slate-900">Zentrale Cockpit-Übersicht</h1>
+            <p class="text-xs text-slate-400">Willkommen zurück! Wähle links ein Modul aus, um Berechnungen anzustellen.</p>
+        </div>
+        <div idpage="finanzen" class="page-section space-y-4">
+            <h1 class="text-xl font-bold text-slate-900">Finanzübersicht & GuV</h1>
+            <p class="text-xs text-slate-400">Schnittstellen-Daten deiner Banken und Zahlungsabwickler.</p>
+        </div>
+        <div idpage="personal" class="page-section space-y-4">
+            <h1 class="text-xl font-bold text-slate-900">1. Personalverwaltung</h1>
+            <p class="text-xs text-slate-400">Dienstpläne, Zeiterfassung und Lohnkostenfaktor.</p>
+        </div>
+        <div idpage="warenwirtschaft" class="page-section space-y-4">
+            <h1 class="text-xl font-bold text-slate-900">2. Warenwirtschaft</h1>
+            <p class="text-xs text-slate-400">Lagerbestände, Mindesthaltbarkeit und digitale Lieferscheine.</p>
+        </div>
+        <!-- BEREICH 3: GASTRO-WERKZEUGE (AKTIV BEIM START) -->
+        <div idpage="werkzeuge" class="page-section active space-y-6">
+
+            <header class="flex flex-col lg:flex-row justify-between lg:items-center gap-4 border-b border-slate-100 pb-5">
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight text-slate-900">3. Gastro-Werkzeuge & Rechner</h1>
+                    <p class="text-xs text-slate-400 mt-1">Smarte Werkzeuge zur Break-Even-Berechnung und exakten Rezeptur-Kalkulation.</p>
+                </div>
+                <div class="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-100 px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1">
+                    <span>⚡ Rechnungs-OCR aktiv: Einkaufspreise verknüpft</span>
+                </div>
+            </header>
+            <!-- INTERAKTIVER REZEPTURRECHNER -->
+            <section id="rezeptur-card" class="bg-white border border-slate-100 rounded-2xl shadow-sm p-5 space-y-4 premium-transit">
+                <div class="flex justify-between items-start border-b border-slate-100 pb-3">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                            <span>🍳</span> Interaktiver Rezeptur- & Margenrechner
+                        </h2>
+                        <p class="text-[11px] text-slate-400">Verändere Mengen oder Preise – das System berechnet Margen und schlägt bei Limit-Überschreitung Alarm.</p>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-[10px] text-slate-400 block font-medium">Ziel-Wareneinsatz</span>
+                        <span id="target-badge-display" class="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">max. 25%</span>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-2 space-y-3">
+                        <input type="text" value="Premium Avocado Burger (1 Portion)" class="bg-slate-50 text-xs font-bold text-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 w-full focus:outline-none">
+
+                        <div class="space-y-2">
+                            <p class="text-[10px] font-bold tracking-wider text-slate-400 uppercase">Zutaten & Mengen</p>
+
+                            <!-- Zutat 1 -->
+                            <div class="flex items-center gap-2 bg-slate-50/50 p-2 rounded-xl border border-slate-100 text-xs">
+                                <div class="w-1/3 font-semibold text-slate-700">Rinder-Patty (Gourmet)</div>
+                                <div class="flex items-center gap-1 w-1/4">
+                                    <input type="number" id="input-fleisch-menge" value="180" class="w-14 bg-white border border-slate-200 rounded px-1 py-0.5 text-center font-medium">
+                                    <span class="text-slate-400 text-[11px]">g</span>
+                                </div>
+                                <div class="text-[11px] text-slate-400 w-1/4"><span class="bg-indigo-50 text-indigo-700 font-semibold px-1 rounded text-[10px]">OCR</span> 14,50 €/kg</div>
+                                <div id="cost-fleisch" class="w-1/6 text-right font-bold text-slate-800">2,61 €</div>
+                            </div>
+                            <!-- Zutat 2 -->
+                            <div class="flex items-center gap-2 bg-slate-50/50 p-2 rounded-xl border border-slate-100 text-xs">
+                                <div class="w-1/3 font-semibold text-slate-700">Avocado Fresh</div>
+                                <div class="flex items-center gap-1 w-1/4">
+                                    <input type="number" id="input-avocado-menge" value="0.5" step="0.1" class="w-14 bg-white border border-slate-200 rounded px-1 py-0.5 text-center font-medium">
+                                    <span class="text-slate-400 text-[11px]">Stk</span>
+                                </div>
+                                <div class="text-[11px] text-slate-400 w-1/4"><span class="bg-indigo-50 text-indigo-700 font-semibold px-1 rounded text-[10px]">OCR</span> 1,20 €/Stk</div>
+                                <div id="cost-avocado" class="w-1/6 text-right font-bold text-slate-800">0,60 €</div>
+                            </div>
+                            <!-- Zutat 3 -->
+                            <div class="flex items-center gap-2 bg-slate-50/50 p-2 rounded-xl border border-slate-100 text-xs">
+                                <div class="w-1/3 font-semibold text-slate-700">Brioche Burger Bun</div>
+                                <div class="flex items-center gap-1 w-1/4">
+                                    <input type="number" id="input-bun-menge" value="1" class="w-14 bg-white border border-slate-200 rounded px-1 py-0.5 text-center font-medium">
+                                    <span class="text-slate-400 text-[11px]">Stk</span>
+                                </div>
+                                <div class="text-[11px] text-slate-400 w-1/4"><span class="bg-indigo-50 text-indigo-700 font-semibold px-1 rounded text-[10px]">OCR</span> 0,45 €/Stk</div>
+                                <div id="cost-bun" class="w-1/6 text-right font-bold text-slate-800">0,45 €</div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Kalkulations-Ausgabe-Box -->
+                    <div class="bg-slate-900 text-white rounded-2xl p-4 flex flex-col justify-between shadow-md">
+                        <div class="space-y-3">
+                            <p class="text-[10px] font-bold tracking-widest text-indigo-400 uppercase">Kalkulation</p>
+                            <div>
+                                <span class="text-[11px] text-slate-400 block">Wareneinsatz (+ Schwund)</span>
+                                <span id="total-warenkosten-display" class="text-lg font-bold text-white">3,73 €</span>
+                            </div>
+                            <div class="pt-2 border-t border-white/10">
+                                <span class="text-[11px] text-slate-400 block">Verkaufspreis (Brutto)</span>
+                                <div class="flex items-center gap-1 mt-1">
+                                    <input type="number" id="input-vk-preis" value="14.90" step="0.1" class="bg-white/10 border border-white/20 text-white font-bold rounded px-2 py-1 w-24 text-sm focus:outline-none">
+                                    <span class="text-xs font-bold">€</span>
+                                </div>
+                            </div>
+                            <div class="pt-2 border-t border-white/10 grid grid-cols-2 gap-2">
+                                <div>
+                                    <span class="text-[10px] text-slate-400 block">Einsatz in %</span>
+                                    <span id="food-cost-percentage-display" class="text-sm font-bold text-emerald-400">25,0 %</span>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] text-slate-400 block">Rohgewinn (€)</span>
+                                    <span id="rohgewinn-display" class="text-sm font-bold text-white">10,20 €</span>
+                                </div>
+                            </div>
+                        </div>
+                        <p id="limit-warning-text" class="text-[11px] text-rose-400 font-bold mt-2 hidden">🚨 Zielwert überschritten!</p>
+                        <button onclick="alert('Gericht gespeichert!');" class="w-full mt-3 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold py-2 rounded-xl premium-transit">💾 Speichern</button>
+                    </div>
+                </div>
+            </section>
+            <!-- BREAK-EVEN RECHNER (VOLLE BREITE) -->
+            <section class="bg-white border border-slate-100 rounded-2xl shadow-sm p-5">
+                <div class="border-b border-slate-100 pb-3 mb-4">
+                    <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <span>📉</span> Break-Even & Mindestumsatz-Planer
+                    </h2>
+                    <p class="text-[11px] text-slate-400">Ermittle den nötigen Mindestumsatz anhand deiner Fixkosten-Struktur.</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                    <div class="space-y-4 text-xs">
+                        <div>
+                            <div class="flex justify-between text-slate-600 font-medium mb-1">
+                                <span>Monatliche Fixkosten (Miete, Personal, Strom)</span>
+                                <span id="fixkosten-label" class="font-bold text-slate-900">18.500 €</span>
+                            </div>
+                            <input type="range" id="fixkosten-slider" min="5000" max="50000" step="500" value="18500" class="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-slate-600 font-medium mb-1">
+                                <span>Durchschnittlicher Bon (Umsatz pro Gast)</span>
+                                <span id="kassenbon-label" class="font-bold text-slate-900">22,50 €</span>
+                            </div>
+                            <input type="range" id="kassenbon-slider" min="5" max="100" step="0.5" value="22.5" class="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                        </div>
+                    </div>
+                    <div class="bg-indigo-50/50 border border-indigo-100 rounded-xl p-4 space-y-2 text-xs">
+                        <div class="flex justify-between items-center">
+                            <span class="text-slate-700 font-semibold">Nötiger Monatsumsatz:</span>
+                            <span id="output-monatsumsatz" class="text-sm font-bold text-indigo-700">24.667 €</span>
+                        </div>
+                        <div class="flex justify-between items-center border-t border-indigo-100 pt-2 text-[11px]">
+                            <span class="text-slate-500">Gäste pro Monat nötig:</span>
+                            <span id="output-gaeste-monat" class="font-bold text-slate-800">1.096 Personen</span>
+                        </div>
+                        <div class="flex justify-between items-center text-[11px]">
+                            <span class="text-slate-500">Tagesziel (bei 26 Öffnungstagen):</span>
+                            <span id="output-tagesziel" class="font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">948 € / Tag</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+        <!-- BEREICH 4: GLOBALE APP- & SYSTEMEINSTELLUNGEN -->
+        <div idpage="einstellungen" class="page-section space-y-6">
+
+            <header class="flex flex-col lg:flex-row justify-between lg:items-center gap-4 border-b border-slate-100 pb-5">
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight text-slate-900">Globale App- & Systemeinstellungen</h1>
+                    <p class="text-xs text-slate-400 mt-1">Verwalte deine Kontenverknüpfungen, Datensicherheit, API-Schnittstellen und globalen Store-Vorgaben.</p>
+                </div>
+                <button onclick="alert('Alle globalen Parameter wurden verschlüsselt gespeichert!');" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-4 py-2 rounded-xl premium-transit shadow-md shadow-indigo-600/10">
+                    Konfiguration anwenden
+                </button>
+            </header>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-2 space-y-6">
+
+                    <!-- KONTEN-VERKNÜPFUNG -->
+                    <section class="bg-white border border-slate-100 rounded-2xl p-5 space-y-4">
+                        <h2 class="text-xs font-bold tracking-wider text-slate-400 uppercase flex items-center gap-2"><span>🔌</span> Konten-Verknüpfung & Live-Daten</h2>
+                        <div class="space-y-3 text-xs">
+                            <div class="flex justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 items-center">
+                                <div>
+                                    <p class="font-semibold text-slate-700">Kassensystem (POS Live-API)</p>
+                                    <p class="text-[10px] text-slate-400">Gekoppelt mit Vectron / Lightspeed für Live-Daten</p>
+                                </div>
+                                <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">✓ Verbunden</span>
+                            </div>
+                            <div class="flex justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 items-center">
+                                <div>
+                                    <p class="font-semibold text-slate-700">Zahlungsabwickler (Card/Terminal)</p>
+                                    <p class="text-[10px] text-slate-400">Abgleich von Kartenzahlungen über Stripe / SumUp</p>
+                                </div>
+                                <button class="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-lg">Verknüpfen</button>
+                            </div>
+                        </div>
+                    </section>
+                    <!-- SICHERHEIT -->
+                    <section class="bg-white border border-slate-100 rounded-2xl p-5 space-y-4">
+                        <h2 class="text-xs font-bold tracking-wider text-slate-400 uppercase flex items-center gap-2"><span>🔒</span> Datensicherheit & Cloud-Backups</h2>
+                        <div class="space-y-4 text-xs">
+                            <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                <div>
+                                    <p class="font-semibold text-slate-700">Zwei-Faktor-Authentifizierung (2FA)</p>
+                                    <p class="text-[10px] text-slate-400">Schutz für Admin- und Inhaber-Logins</p>
+                                </div>
+                                <input type="checkbox" checked class="w-4 h-4 accent-indigo-600">
+                            </div>
+                        </div>
+                    </section>
+                    <!-- CONTROLLING STEUERUNG -->
+                    <section class="bg-white border border-slate-100 rounded-2xl p-5 space-y-4">
+                        <h2 class="text-xs font-bold tracking-wider text-slate-400 uppercase flex items-center gap-2"><span>📊</span> Globale Controlling-Hebel (Live-Auswirkung)</h2>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                            <div>
+                                <label class="block text-slate-600 font-medium mb-1">Ziel-Wareneinsatz (%)</label>
+                                <input type="number" id="setting-target-foodcost" value="25" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-medium text-slate-800 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-slate-600 font-medium mb-1">Verlust-Aufschlag (%)</label>
+                                <input type="number" id="setting-loss-surcharge" value="2" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-medium text-slate-800 focus:outline-none">
+                            </div>
+                        </div>
+                    </section>
+                </div>
+                <!-- RECHTE RECHTE SPALTE -->
+                <div class="space-y-4">
+                    <section class="bg-slate-900 text-white rounded-2xl p-5 space-y-4 shadow-md">
+                        <p class="text-[10px] font-bold tracking-widest text-indigo-400 uppercase">👥 Rollen & Rechte</p>
+                        <div class="space-y-2 text-xs">
+                            <div class="p-2 bg-white/5 border border-white/10 rounded-xl flex justify-between items-center">
+                                <span>Geschäftsführer</span><span class="text-[9px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded">Admin</span>
+                            </div>
+                            <div class="p-2 bg-white/5 border border-white/10 rounded-xl flex justify-between items-center">
+                                <span>Service / Küche</span><span class="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded">Ansicht</span>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </div>
+    </main>
+    <!-- ==========================================
+         JAVASCRIPT-LOGIK (DIE RECHENMASCHINE)
+         ========================================== -->
+    <script>
+        // Globaler Zustand der Applikation
+        const appState = {
+            targetFoodCost: 25.0,  // Wird live aus den Einstellungen synchronisiert
+            lossSurcharge: 2.0,    // Wird live aus den Einstellungen synchronisiert
+            ingredients: {
+                fleischKiloPreis: 14.50,
+                avocadoStueckPreis: 1.20,
+                bunStueckPreis: 0.45
+            }
+        };
+        // --- SEITEN-NAVIGATION LOGIK ---
+        function switchPage(pageId) {
+            // Alle Sektionen verstecken
+            document.querySelectorAll('.page-section').forEach(section => {
+                section.classList.remove('active');
+            });
+            // Gewünschte Sektion anzeigen
+            const targetPage = document.querySelector(`[idpage="${pageId}"]`);
+            if (targetPage) targetPage.classList.add('active');
+            // Navigations-Styling updaten
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('text-indigo-400', 'bg-white/5', 'font-semibold');
+                item.classList.add('text-slate-400');
+            });
+            const activeNav = document.getElementById(`nav-${pageId}`) || event.currentTarget;
+            if (activeNav) {
+                activeNav.classList.remove('text-slate-400');
+                activeNav.classList.add('text-indigo-400', 'bg-white/5', 'font-semibold');
+            }
+        }
+        // --- SÄULE 1: REZEPTUR-RECHNER-MATHEMATIK ---
+        function calculateRecipe() {
+            // Inputs greifen
+            const grammFleisch = parseFloat(document.getElementById('input-fleisch-menge').value) || 0;
+            const stkAvocado = parseFloat(document.getElementById('input-avocado-menge').value) || 0;
+            const stkBun = parseFloat(document.getElementById('input-bun-menge').value) || 0;
+            const bruttoVerkaufspreis = parseFloat(document.getElementById('input-vk-preis').value) || 0;
+            // Einzelkosten berechnen
+            const kostenFleisch = (grammFleisch / 1000) * appState.ingredients.fleischKiloPreis;
+            const kostenAvocado = stkAvocado * appState.ingredients.avocadoStueckPreis;
+            const kostenBun = stkBun * appState.ingredients.bunStueckPreis;
+            // Teil-Anzeigen updaten
+            document.getElementById('cost-fleisch').innerText = kostenFleisch.toFixed(2) + " €";
+            document.getElementById('cost-avocado').innerText = kostenAvocado.toFixed(2) + " €";
+            document.getElementById('cost-bun').innerText = kostenBun.toFixed(2) + " €";
+            // Reiner Wareneinsatz netto
+            const reineWarenkosten = kostenFleisch + kostenAvocado + kostenBun;
+            // Verlustaufschlag aus den globalen Einstellungen einrechnen
+            const finaleWarenkosten = reineWarenkosten * (1 + (appState.lossSurcharge / 100));
+            // Mehrwertsteuer herausrechnen (Gastro-Schnitt im Haus: 19% MwSt.) für Netto-Umsatz-Vergleich
+            const nettoUmsatz = bruttoVerkaufspreis / 1.19;
+
+            // Wareneinsatz-Quote berechnen
+            let foodCostPercentage = 0;
+            if (nettoUmsatz > 0) {
+                foodCostPercentage = (finaleWarenkosten / nettoUmsatz) * 100;
+            }
+            const rohgewinn = Math.max(0, nettoUmsatz - finaleWarenkosten);
+            // Ergebnisse ins UI rendern
+            document.getElementById('total-warenkosten-display').innerText = finaleWarenkosten.toFixed(2) + " €";
+            document.getElementById('food-cost-percentage-display').innerText = foodCostPercentage.toFixed(1) + " %";
+            document.getElementById('rohgewinn-display').innerText = rohgewinn.toFixed(2) + " €";
+            // --- WARNSYSTEM ---
+            const rezepturKarte = document.getElementById('rezeptur-card');
+            const limitWarnung = document.getElementById('limit-warning-text');
+            const percentDisplay = document.getElementById('food-cost-percentage-display');
+            if (foodCostPercentage > appState.targetFoodCost) {
+                // Limit gerissen -> Rot-Warnung aktivieren
+                rezepturKarte.classList.remove('bg-white', 'border-slate-100');
+                rezepturKarte.classList.add('bg-rose-50/60', 'border-rose-200');
+                limitWarnung.classList.remove('hidden');
+                limitWarnung.innerText = `🚨 Ziel von ${appState.targetFoodCost}% überschritten!`;
+                percentDisplay.classList.remove('text-emerald-400');
+                percentDisplay.classList.add('text-rose-500');
+            } else {
+                // Alles perfekt -> Grüner Status
+                rezepturKarte.classList.add('bg-white', 'border-slate-100');
+                rezepturKarte.classList.remove('bg-rose-50/60', 'border-rose-200');
+                limitWarnung.classList.add('hidden');
+                percentDisplay.classList.remove('text-rose-500');
+                percentDisplay.classList.add('text-emerald-400');
+            }
+        }
+        // --- SÄULE 2: BREAK-EVEN MATHEMATIK ---
+        function calculateBreakEven() {
+            const fixkosten = parseFloat(document.getElementById('fixkosten-slider').value);
+            const durchschnittsBon = parseFloat(document.getElementById('kassenbon-slider').value);
+            // Labels updaten
+            document.getElementById('fixkosten-label').innerText = fixkosten.toLocaleString('de-DE') + " €";
+            document.getElementById('kassenbon-label').innerText = durchschnittsBon.toFixed(2) + " €";
+            // Wir nehmen einen durchschnittlichen Wareneinsatz-Schnitt von 30% für die Deckungsbeitrags-Marge an
+            const deckungsbeitragProGast = durchschnittsBon * 0.70;
+            // Kalkulation der Gästeanzahl
+            const benoetigteGaeste = Math.ceil(fixkosten / deckungsbeitragProGast);
+            const benoetigterUmsatz = benoetigteGaeste * durchschnittsBon;
+            const tagesZielUmsatz = benoetigterUmsatz / 26; // Berechnet auf 26 Geöffnete Tage
+            // UI-Ausgabe
+            document.getElementById('output-monatsumsatz').innerText = Math.round(benoetigterUmsatz).toLocaleString('de-DE') + " €";
+            document.getElementById('output-gaeste-monat').innerText = benoetigteGaeste.toLocaleString('de-DE') + " Personen";
+            document.getElementById('output-tagesziel').innerText = Math.round(tagesZielUmsatz).toLocaleString('de-DE') + " € / Tag";
+        }
+        // --- SÄULE 3: LIVE SETTINGS-SYNCHRONISATION ---
+        function initSettingsSync() {
+            const foodcostSettingInput = document.getElementById('setting-target-foodcost');
+            const lossSettingInput = document.getElementById('setting-loss-surcharge');
+            const targetBadge = document.getElementById('target-badge-display');
+            foodcostSettingInput.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value) || 0;
+                appState.targetFoodCost = val;
+                targetBadge.innerText = `max. ${val}%`;
+                calculateRecipe(); // Berechne Rezept mit neuem Schwellenwert live neu!
+            });
+            lossSettingInput.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value) || 0;
+                appState.lossSurcharge = val;
+                calculateRecipe(); // Berechne Rezept mit neuem Schwund live neu!
+            });
+        }
+        // --- INITIALISIERUNG BEIM LADEN ---
+        document.addEventListener("DOMContentLoaded", () => {
+            // Event Listener für Rezepturrechner-Inputs hängen
+            document.getElementById('input-fleisch-menge').addEventListener('input', calculateRecipe);
+            document.getElementById('input-avocado-menge').addEventListener('input', calculateRecipe);
+            document.getElementById('input-bun-menge').addEventListener('input', calculateRecipe);
+            document.getElementById('input-vk-preis').addEventListener('input', calculateRecipe);
+            // Event Listener für Break-Even-Slider hängen
+            document.getElementById('fixkosten-slider').addEventListener('input', calculateBreakEven);
+            document.getElementById('kassenbon-slider').addEventListener('input', calculateBreakEven);
+            // Einstellungen aktivieren
+            initSettingsSync();
+            // Erstkalkulation ausführen
+            calculateRecipe();
+            calculateBreakEven();
+        });
+    </script>
+</body>
+</html>
