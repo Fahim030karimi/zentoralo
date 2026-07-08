@@ -15,6 +15,8 @@ export default function Rechnungen() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("alle");
   const [statusFilter, setStatusFilter] = useState("alle");
+  const [scanning, setScanning] = useState(false);
+  const [scanMessage, setScanMessage] = useState(null);
 
   const [form, setForm] = useState({
     direction: "in",
@@ -88,6 +90,38 @@ export default function Rechnungen() {
     }
   }
 
+  // Loest den Gmail-Scan im Backend aus (dieselbe Logik wie der stuendliche
+  // Hintergrund-Job) und laedt die Liste danach neu, damit neue Rechnungen
+  // sofort sichtbar sind.
+  async function scanInvoices() {
+    setScanning(true);
+    setScanMessage(null);
+    setError("");
+    try {
+      const result = await api.post("/api/google/scan-invoices", {});
+      if (!result.connected) {
+        setScanMessage({
+          type: "error",
+          text: "Kein Google-Konto verbunden. Verbinde dein Konto unter Einstellungen → Konten.",
+        });
+      } else if (result.error) {
+        setScanMessage({ type: "error", text: result.error });
+      } else {
+        setScanMessage({
+          type: "success",
+          text: `${result.imported} neue Rechnung${result.imported === 1 ? "" : "en"} importiert (${result.scanned} Mail${
+            result.scanned === 1 ? "" : "s"
+          } geprüft).`,
+        });
+        load();
+      }
+    } catch (e) {
+      setScanMessage({ type: "error", text: e.message });
+    } finally {
+      setScanning(false);
+    }
+  }
+
   const filtered = useMemo(() => {
     return invoices.filter((inv) => {
       if (typeFilter !== "alle" && inv.direction !== typeFilter) return false;
@@ -117,10 +151,31 @@ export default function Rechnungen() {
         <div>
           <h1 className="text-xl font-bold tracking-tight text-slate-900">2. Rechnungsverwaltung (In & Out)</h1>
           <p className="text-xs text-slate-400 mt-1">
-            Lieferantenbelege, Dienstleistungen und B2B-Erlöse an einem Ort.
+            Lieferantenbelege, Dienstleistungen und B2B-Erlöse an einem Ort. Neue Rechnungen aus Gmail werden
+            stündlich automatisch gescannt.
           </p>
         </div>
+        <button
+          onClick={scanInvoices}
+          disabled={scanning}
+          className="text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed px-4 py-2 rounded-lg premium-transit self-start lg:self-center shadow-xs flex items-center gap-2"
+        >
+          <span>{scanning ? "⏳" : "🔄"}</span>
+          {scanning ? "Scanne Gmail…" : "Rechnungen aktualisieren"}
+        </button>
       </header>
+
+      {scanMessage && (
+        <div
+          className={`text-xs font-medium rounded-xl px-4 py-3 border ${
+            scanMessage.type === "success"
+              ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+              : "bg-rose-50 border-rose-200 text-rose-700"
+          }`}
+        >
+          {scanMessage.text}
+        </div>
+      )}
 
       {error && (
         <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium rounded-xl px-4 py-3">
@@ -281,7 +336,17 @@ export default function Rechnungen() {
                     </span>
                   </td>
                   <td className="py-3.5 px-4">
-                    <span className="font-bold text-slate-800 block">{inv.partner}</span>
+                    <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                      {inv.partner}
+                      {inv.source === "gmail-scan" && (
+                        <span
+                          title="Automatisch aus Gmail importiert"
+                          className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded"
+                        >
+                          📧 Gmail
+                        </span>
+                      )}
+                    </span>
                     <span className="text-[10px] text-slate-400">{inv.category || "—"}</span>
                   </td>
                   <td className="py-3.5 px-4">
