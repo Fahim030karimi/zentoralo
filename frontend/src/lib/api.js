@@ -3,7 +3,7 @@
 // Basis-URL statt relativer /api/-Pfade. VITE_API_URL wird beim Build gesetzt
 // (siehe Render-Static-Site-Umgebungsvariablen); ohne sie greift der Fallback
 // auf die aktuelle Backend-URL.
-const API_BASE = import.meta.env.VITE_API_URL || "https://zentoralo-backend.onrender.com";
+export const API_BASE = import.meta.env.VITE_API_URL || "https://zentoralo-backend.onrender.com";
 
 async function request(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
