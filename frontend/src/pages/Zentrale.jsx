@@ -1,24 +1,99 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { useSettings } from "../context/SettingsContext.jsx";
 
-const eur = (value) => `${Number(value || 0).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+const eur = (value) =>
+  `${Number(value || 0).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+
+// Zenty: echter KI-Chat ueber die Anthropic-API im Backend (/api/zenty/ask), der die
+// tatsaechlichen Betriebsdaten (Umsatz, Rechnungen, Lager, anstehende Zahlungen) kennt -
+// kein Demo-Platzhalter mehr.
+function ZentyChat() {
+  const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [asking, setAsking] = useState(false);
+  const [error, setError] = useState("");
+
+  async function ask(e) {
+    e.preventDefault();
+    if (!question.trim() || asking) return;
+    setAsking(true);
+    setError("");
+    setAnswer("");
+    try {
+      const res = await api.post("/api/zenty/ask", { question: question.trim() });
+      setAnswer(res.answer);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setAsking(false);
+    }
+  }
+
+  return (
+    <div className="lg:col-span-2 bg-white border border-slate-100 rounded-2xl p-5 shadow-xs flex flex-col justify-between h-56">
+      <div className="overflow-y-auto">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse shadow-xs shadow-indigo-500/50"></div>
+          <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-500">
+            Zenty • Zentoralo Intelligenz
+          </span>
+        </div>
+        <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm text-slate-600 max-w-2xl leading-relaxed">
+          {asking
+            ? "Zenty schaut sich deine Zahlen an…"
+            : error
+            ? <span className="text-rose-600">{error}</span>
+            : answer || (
+                <>
+                  👋 Hi Chef! Ich bin <span className="font-semibold text-indigo-600">Zenty</span>. Frag
+                  mich etwas zu deinem Umsatz, deinen Rechnungen oder deinem Lager.
+                </>
+              )}
+        </div>
+      </div>
+      <form onSubmit={ask} className="flex gap-3 border-t border-slate-100 pt-3">
+        <input
+          type="text"
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          placeholder="Frag Zenty etwas…"
+          className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 premium-transit text-slate-800"
+        />
+        <button
+          type="submit"
+          disabled={asking || !question.trim()}
+          className="premium-transit bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold px-5 py-2 rounded-xl shadow-xs"
+        >
+          {asking ? "…" : "Fragen"}
+        </button>
+      </form>
+    </div>
+  );
+}
 
 export default function Zentrale() {
   const { targetFoodCost } = useSettings();
   const [range, setRange] = useState("heute");
   const [financeRows, setFinanceRows] = useState([]);
   const [lowStock, setLowStock] = useState([]);
+  const [invoices, setInvoices] = useState([]);
+  const [upcoming, setUpcoming] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
       api.get("/api/finance").catch(() => []),
       api.get("/api/inventory").catch(() => []),
+      api.get("/api/invoices").catch(() => []),
+      api.get("/api/upcoming").catch(() => []),
     ])
-      .then(([finance, inventory]) => {
+      .then(([finance, inventory, invoiceRows, upcomingRows]) => {
         setFinanceRows(finance);
         setLowStock(inventory.filter((it) => Number(it.current_stock) < Number(it.min_stock)));
+        setInvoices(invoiceRows);
+        setUpcoming(upcomingRows);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -37,6 +112,40 @@ export default function Zentrale() {
       : null;
   const foodCostPct = revenue > 0 ? (foodCost / revenue) * 100 : 0;
 
+  const recentGmailInvoices = useMemo(
+    () =>
+      invoices
+        .filter((i) => i.source === "gmail-scan")
+        .sort((a, b) => new Date(b.invoice_date) - new Date(a.invoice_date))
+        .slice(0, 4),
+    [invoices]
+  );
+
+  const upcomingNext = useMemo(
+    () =>
+      upcoming
+        .filter((u) => new Date(u.expected_date) >= new Date(new Date().toDateString()))
+        .slice(0, 4),
+    [upcoming]
+  );
+
+  const overdueInvoices = useMemo(
+    () =>
+      invoices.filter(
+        (i) =>
+          i.direction === "in" &&
+          i.status !== "bezahlt" &&
+          i.due_date &&
+          new Date(i.due_date) < new Date()
+      ),
+    [invoices]
+  );
+
+  const highPriorityUpcoming = useMemo(
+    () => upcoming.filter((u) => u.priority === "hoch"),
+    [upcoming]
+  );
+
   // Betriebs-Index: einfache, echte Heuristik aus vorhandenen Daten (kein Fake-Wert) -
   // 100 Basispunkte, Abzuege bei Wareneinsatz ueber Ziel und bei Mindestbestand-
   // Unterschreitungen. TODO Phase 5 (Rest): vollstaendiges Scoring inkl. Personalquote,
@@ -47,10 +156,46 @@ export default function Zentrale() {
       score -= Math.min(30, (foodCostPct - targetFoodCost) * 3);
     }
     score -= Math.min(30, lowStock.length * 5);
+    score -= Math.min(20, overdueInvoices.length * 5);
     return Math.max(0, Math.round(score));
-  }, [latest, foodCostPct, targetFoodCost, lowStock]);
+  }, [latest, foodCostPct, targetFoodCost, lowStock, overdueInvoices]);
 
   const indexColor = betriebsIndex >= 80 ? "text-emerald-500" : betriebsIndex >= 50 ? "text-amber-500" : "text-rose-500";
+
+  // Naechste Schritte: echte, aus den Live-Daten abgeleitete Handlungsempfehlungen statt
+  // eines statischen Demo-Fortschrittsbalkens.
+  const nextSteps = useMemo(() => {
+    const steps = [];
+    if (lowStock.length > 0) {
+      steps.push({
+        icon: "📦",
+        label: `${lowStock.length} Artikel unter Mindestbestand nachbestellen`,
+        to: "/store/warenwirtschaft",
+      });
+    }
+    if (overdueInvoices.length > 0) {
+      steps.push({
+        icon: "⚠️",
+        label: `${overdueInvoices.length} überfällige Rechnung${overdueInvoices.length === 1 ? "" : "en"} begleichen`,
+        to: "/finanzen/rechnungen",
+      });
+    }
+    if (highPriorityUpcoming.length > 0) {
+      steps.push({
+        icon: "💸",
+        label: `${highPriorityUpcoming.length} wichtige Zahlung${highPriorityUpcoming.length === 1 ? "" : "en"} anstehend`,
+        to: "/finanzen/cashflow",
+      });
+    }
+    if (latest && foodCostPct > targetFoodCost) {
+      steps.push({
+        icon: "🍳",
+        label: `Wareneinsatz ${(foodCostPct - targetFoodCost).toFixed(1)} Punkte über Ziel prüfen`,
+        to: "/finanzen/analysen",
+      });
+    }
+    return steps;
+  }, [lowStock, overdueInvoices, highPriorityUpcoming, latest, foodCostPct, targetFoodCost]);
 
   return (
     <div className="space-y-6">
@@ -140,70 +285,81 @@ export default function Zentrale() {
 
         <div className="lg:col-span-2 bg-white border border-slate-100 rounded-2xl p-5 shadow-xs">
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-3">
-            KI-Event- & Wetterprognose <span className="text-slate-300 font-medium normal-case">(Demo – Phase 1)</span>
+            Anstehende Zahlungen <span className="text-slate-300 font-medium normal-case">(aus Cashflow & Liquidität)</span>
           </span>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 bg-slate-50/80 rounded-xl border border-slate-100">
-              <p className="text-sm font-bold text-indigo-600 flex items-center gap-2">📅 In 2 Wochen: Muttertag</p>
-              <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-                Vorjahr zeigt +42% Reservierungen. Möchtest du ein spezielles Feiertags-Menü anbieten?
-              </p>
-              <button
-                onClick={() => alert("Diese Funktion wird mit der KI-Anbindung in Phase 1 aktiv.")}
-                className="premium-transit mt-3 text-[10px] bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-3 py-1.5 rounded-md shadow-xs"
-              >
-                Menü planen
-              </button>
+          {upcomingNext.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {upcomingNext.map((u) => (
+                <div key={u.id} className="p-3 bg-slate-50/80 rounded-xl border border-slate-100 flex justify-between items-center">
+                  <div>
+                    <p className="text-sm font-bold text-slate-800">{u.category}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {new Date(u.expected_date).toLocaleDateString("de-DE")} ·{" "}
+                      {u.priority === "hoch" ? (
+                        <span className="text-rose-600 font-semibold">hohe Priorität</span>
+                      ) : u.priority === "mittel" ? (
+                        <span className="text-amber-600 font-semibold">mittlere Priorität</span>
+                      ) : (
+                        <span className="text-slate-400">niedrige Priorität</span>
+                      )}
+                    </p>
+                  </div>
+                  <p className={`font-bold ${u.transaction_type === "income" ? "text-emerald-600" : "text-slate-900"}`}>
+                    {u.transaction_type === "income" ? "+" : "−"}
+                    {eur(u.amount)}
+                  </p>
+                </div>
+              ))}
             </div>
-            <div className="p-4 bg-slate-50/80 rounded-xl border border-slate-100 flex flex-col justify-between">
-              <div>
-                <p className="text-sm font-bold text-slate-800">Wetter-Tipp: Freitag (28°C ☀️)</p>
-                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-                  Prognose verlangt Mehrverbrauch: +15kg Limetten, +2 Fässer Bier.
-                </p>
-              </div>
-              <span className="text-[11px] text-emerald-600 font-semibold block mt-3">
-                ✓ Schichtplan abgedeckt
-              </span>
-            </div>
-          </div>
+          ) : (
+            <p className="text-xs text-slate-400">
+              Keine anstehenden Buchungen erfasst. Trage sie unter{" "}
+              <Link to="/finanzen/cashflow" className="text-indigo-600 font-semibold hover:underline">
+                Finanzen → Cashflow
+              </Link>{" "}
+              ein.
+            </p>
+          )}
         </div>
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2 bg-white border border-slate-100 rounded-2xl p-5 shadow-xs">
           <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-3">
-            Eingang Belege & Kasse <span className="text-slate-300 font-medium normal-case">(Demo – Google-Anbindung folgt)</span>
+            Eingang Belege & Kasse <span className="text-slate-300 font-medium normal-case">(automatisch aus Gmail gescannt)</span>
           </h3>
-          <div className="divide-y divide-slate-100 text-sm">
-            <div className="py-3 flex justify-between items-center">
-              <div>
-                <p className="font-semibold text-slate-800 text-sm">
-                  Metro AG <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded ml-2 font-medium">PDF</span>
-                </p>
-                <p className="text-xs text-slate-400 mt-0.5">Wird künftig automatisch aus Google Drive gelesen</p>
-              </div>
-              <p className="font-bold text-slate-900">412,50 €</p>
+          {recentGmailInvoices.length > 0 ? (
+            <div className="divide-y divide-slate-100 text-sm">
+              {recentGmailInvoices.map((inv) => (
+                <div key={inv.id} className="py-3 flex justify-between items-center">
+                  <div>
+                    <p className="font-semibold text-slate-800 text-sm">
+                      {inv.partner}{" "}
+                      <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded ml-2 font-medium">
+                        📧 Gmail
+                      </span>
+                    </p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {inv.invoice_date?.slice(0, 10)}
+                      {inv.category ? ` · ${inv.category}` : ""}
+                    </p>
+                  </div>
+                  <p className="font-bold text-slate-900">{eur(inv.amount_gross)}</p>
+                </div>
+              ))}
             </div>
-            <div className="py-3 flex justify-between items-center bg-amber-50/30 px-3 -mx-3 rounded-xl border border-amber-100/50 mt-1">
-              <div>
-                <p className="font-bold text-amber-900 text-sm">
-                  UberEats <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded ml-2 font-bold">Mailtext</span>
-                </p>
-                <p className="text-xs text-amber-600 mt-0.5 font-medium">Wert prüfen, dann Enter</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  defaultValue="1.450,00 €"
-                  className="w-24 text-right bg-white border border-amber-200 px-2 py-1 rounded-md text-xs font-bold focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
-                />
-                <button className="premium-transit bg-amber-500 hover:bg-amber-600 text-white px-2 py-1 rounded-md text-xs font-bold shadow-xs">
-                  ✓
-                </button>
-              </div>
-            </div>
-          </div>
+          ) : (
+            <p className="text-xs text-slate-400">
+              Noch keine per Gmail gescannten Rechnungen. Verbinde dein Gmail-Konto unter{" "}
+              <Link to="/einstellungen/konten" className="text-indigo-600 font-semibold hover:underline">
+                Einstellungen → Konten
+              </Link>{" "}
+              oder scanne manuell unter{" "}
+              <Link to="/finanzen/rechnungen" className="text-indigo-600 font-semibold hover:underline">
+                Finanzen → Rechnungen
+              </Link>.
+            </p>
+          )}
         </div>
 
         <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-xs">
@@ -228,65 +384,32 @@ export default function Zentrale() {
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-2 bg-white border border-slate-100 rounded-2xl p-5 shadow-xs flex flex-col justify-between h-56">
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse shadow-xs shadow-indigo-500/50"></div>
-              <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-500">
-                Zenty • Zentoralo Intelligenz
-              </span>
-            </div>
-            <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm text-slate-600 max-w-2xl leading-relaxed">
-              👋 Hi Chef! Ich bin <span className="font-semibold text-indigo-600">Zenty</span>. Sobald die
-              KI-Anbindung in Phase 1 live ist, beantworte ich hier direkt Fragen zu deinen Zahlen.
-            </div>
-          </div>
-          <div className="flex gap-3 border-t border-slate-100 pt-3">
-            <input
-              type="text"
-              placeholder="Frag Zenty etwas…"
-              className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 premium-transit text-slate-800"
-            />
-            <button
-              onClick={() => alert("Zenty ist noch in Entwicklung (Phase 1: KI-Anbindung).")}
-              className="premium-transit bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-5 py-2 rounded-xl shadow-xs"
-            >
-              Fragen
-            </button>
-          </div>
-        </div>
+        <ZentyChat />
 
         <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-xs flex flex-col justify-between h-56">
-          <div>
+          <div className="overflow-y-auto">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-3">
-              Offene Missionen
+              Nächste Schritte
             </span>
-            <div className="space-y-1.5 mb-4">
-              <div className="flex justify-between text-xs font-bold text-slate-700">
-                <span>Missions-Status</span>
-                <span className="text-indigo-600">66% erfüllt</span>
-              </div>
-              <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                <div className="bg-indigo-500 h-full rounded-full" style={{ width: "66%" }}></div>
-              </div>
-            </div>
             <div className="space-y-2">
-              <button className="premium-transit w-full text-left bg-slate-50 hover:bg-indigo-50/50 border border-slate-100 hover:border-indigo-100 p-2.5 rounded-xl text-sm font-medium text-slate-700 flex justify-between items-center group">
-                <span className="flex items-center gap-2">
-                  🚀 <span className="text-xs">Muttertags-Menü checken</span>
-                </span>
-                <span className="text-[10px] font-bold bg-indigo-50 text-indigo-600 px-2 py-1 rounded-md group-hover:bg-indigo-600 group-hover:text-white premium-transit">
-                  Start →
-                </span>
-              </button>
-              <button className="premium-transit w-full text-left bg-slate-50 hover:bg-indigo-50/50 border border-slate-100 hover:border-indigo-100 p-2.5 rounded-xl text-sm font-medium text-slate-700 flex justify-between items-center group">
-                <span className="flex items-center gap-2">
-                  ☀️ <span className="text-xs">Limetten-Bestand erhöhen</span>
-                </span>
-                <span className="text-[10px] font-bold bg-indigo-50 text-indigo-600 px-2 py-1 rounded-md group-hover:bg-indigo-600 group-hover:text-white premium-transit">
-                  Start →
-                </span>
-              </button>
+              {nextSteps.length > 0 ? (
+                nextSteps.map((step, idx) => (
+                  <Link
+                    key={idx}
+                    to={step.to}
+                    className="premium-transit w-full text-left bg-slate-50 hover:bg-indigo-50/50 border border-slate-100 hover:border-indigo-100 p-2.5 rounded-xl text-sm font-medium text-slate-700 flex justify-between items-center group"
+                  >
+                    <span className="flex items-center gap-2">
+                      {step.icon} <span className="text-xs">{step.label}</span>
+                    </span>
+                    <span className="text-[10px] font-bold bg-indigo-50 text-indigo-600 px-2 py-1 rounded-md group-hover:bg-indigo-600 group-hover:text-white premium-transit">
+                      Start →
+                    </span>
+                  </Link>
+                ))
+              ) : (
+                <p className="text-xs text-slate-400">Aktuell nichts Dringendes offen – gut gemacht!</p>
+              )}
             </div>
           </div>
         </div>

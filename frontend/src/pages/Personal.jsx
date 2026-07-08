@@ -257,7 +257,7 @@ export default function Personal() {
                 <div>
                   <p className="font-semibold text-slate-700">{en.employee_name}</p>
                   <p className="text-[10px] text-slate-400">
-                    {en.work_date} · {Number(en.hours).toFixed(2)} Std.
+                    {en.work_date?.slice(0, 10)} · {Number(en.hours).toFixed(2)} Std.
                     {en.note ? ` · ${en.note}` : ""}
                   </p>
                 </div>
