@@ -13,7 +13,7 @@ import bankaccountsRouter from "./routes/bankaccounts.js";
 import upcomingRouter from "./routes/upcoming.js";
 import accountRouter from "./routes/account.js";
 import storeRouter from "./routes/store.js";
-import googleRouter from "./routes/google.js";
+import googleRouter, { scanInvoicesForAccount } from "./routes/google.js";
 import { pool } from "./db/pool.js";
 import { runMigrations } from "./db/migrate.js";
 
@@ -79,4 +79,14 @@ runMigrations(pool).finally(() => {
   app.listen(PORT, () => {
     console.log(`Zentoralo backend listening on port ${PORT}`);
   });
+
+  // Stuendlicher Hintergrund-Scan der Gmail-Rechnungen (Einstellungen > Konten).
+  // Laeuft nur, solange der Prozess aktiv ist - der Free-Tier-Service von Render
+  // schlaeft bei Inaktivitaet ein, dann uebernimmt beim naechsten Seitenaufruf
+  // wieder der manuelle "Aktualisieren"-Button auf der Rechnungen-Seite.
+  setInterval(() => {
+    scanInvoicesForAccount().catch((err) =>
+      console.error("Automatischer Rechnungsscan fehlgeschlagen:", err.message)
+    );
+  }, 60 * 60 * 1000);
 });
