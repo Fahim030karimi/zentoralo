@@ -183,5 +183,11 @@ CREATE TABLE IF NOT EXISTS google_accounts (
 -- koennten sich sonst ueberschneiden).
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'manuell';
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS source_message_id TEXT;
+-- Bewusst OHNE "WHERE source_message_id IS NOT NULL": Postgres behandelt NULL-Werte in
+-- Unique-Indizes ohnehin als paarweise verschieden (mehrere manuelle Rechnungen mit NULL
+-- bleiben also weiterhin erlaubt), aber nur ein Index OHNE Bedingung kann von einem
+-- einfachen "ON CONFLICT (source_message_id)" als Ziel erkannt werden. Der vorherige
+-- partielle Index fuehrte beim Scan zu "no unique or exclusion constraint" Fehlern.
+DROP INDEX IF EXISTS invoices_source_message_id_key;
 CREATE UNIQUE INDEX IF NOT EXISTS invoices_source_message_id_key
-  ON invoices (source_message_id) WHERE source_message_id IS NOT NULL;
+  ON invoices (source_message_id);
