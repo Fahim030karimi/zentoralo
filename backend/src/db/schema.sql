@@ -161,3 +161,17 @@ CREATE TABLE IF NOT EXISTS store_profile (
   backup_frequency TEXT NOT NULL DEFAULT 'stuendlich',
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Phase 1 (Start): Google-Konto-Verknuepfung fuer automatischen Rechnungsscan aus Gmail.
+-- Singleton wie account_profile/store_profile - TODO sobald Multi-User-Login existiert,
+-- hier owner_user_id ergaenzen. Tokens werden bewusst nur hier (Server-DB) gehalten, nie
+-- an das Frontend ausgeliefert.
+CREATE TABLE IF NOT EXISTS google_accounts (
+  id SERIAL PRIMARY KEY,
+  email TEXT NOT NULL,
+  access_token TEXT NOT NULL,
+  refresh_token TEXT,
+  scope TEXT,
+  token_expiry TIMESTAMPTZ,
+  connected_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
