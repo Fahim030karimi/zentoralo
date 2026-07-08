@@ -13,6 +13,7 @@ import bankaccountsRouter from "./routes/bankaccounts.js";
 import upcomingRouter from "./routes/upcoming.js";
 import accountRouter from "./routes/account.js";
 import storeRouter from "./routes/store.js";
+import googleRouter from "./routes/google.js";
 import { pool } from "./db/pool.js";
 import { runMigrations } from "./db/migrate.js";
 
@@ -72,6 +73,7 @@ app.use("/api/bankaccounts", bankaccountsRouter);
 app.use("/api/upcoming", upcomingRouter);
 app.use("/api/account", accountRouter);
 app.use("/api/store", storeRouter);
+app.use("/api/google", googleRouter);
 
 runMigrations(pool).finally(() => {
   app.listen(PORT, () => {
