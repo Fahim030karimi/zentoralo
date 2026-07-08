@@ -136,4 +136,268 @@ router.post("/disconnect", async (_req, res) => {
   res.status(204).end();
 });
 
+// ---------------------------------------------------------------------------
+// Rechnungsscan: liest neue Gmail-Mails, laesst Claude (Anthropic API) Betrag,
+// Lieferant, Rechnungsnr. etc. extrahieren und legt daraus Rechnungen an.
+// Benoetigt zusaetzlich ANTHROPIC_API_KEY als Umgebungsvariable. Wird sowohl vom
+// manuellen "Aktualisieren"-Button (POST /scan-invoices) als auch von einem
+// stuendlichen Hintergrund-Timer in index.js aufgerufen.
+// ---------------------------------------------------------------------------
+
+const GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me";
+const ANTHROPIC_API = "https://api.anthropic.com/v1/messages";
+const INVOICE_QUERY = "(rechnung OR invoice OR quittung OR beleg) has:attachment newer_than:90d";
+
+function anthropicReady() {
+  return Boolean(process.env.ANTHROPIC_API_KEY);
+}
+
+// Erneuert den Access-Token ueber den gespeicherten Refresh-Token, falls er
+// abgelaufen ist oder in den naechsten 2 Minuten ablaeuft.
+async function refreshAccessToken(account) {
+  const expiry = account.token_expiry ? new Date(account.token_expiry).getTime() : 0;
+  const stillValid = expiry - Date.now() > 2 * 60 * 1000;
+  if (stillValid) return account.access_token;
+  if (!account.refresh_token) {
+    throw new Error("Kein Refresh-Token vorhanden - bitte Google-Konto neu verbinden.");
+  }
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: process.env.GOOGLE_CLIENT_ID,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET,
+      refresh_token: account.refresh_token,
+      grant_type: "refresh_token",
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok || !data.access_token) {
+    throw new Error("Google-Token konnte nicht erneuert werden - bitte Konto neu verbinden.");
+  }
+  const newExpiry = data.expires_in
+    ? new Date(Date.now() + data.expires_in * 1000).toISOString()
+    : null;
+  await pool.query("UPDATE google_accounts SET access_token = $1, token_expiry = $2 WHERE id = $3", [
+    data.access_token,
+    newExpiry,
+    account.id,
+  ]);
+  return data.access_token;
+}
+
+function base64UrlToBuffer(data) {
+  const base64 = data.replace(/-/g, "+").replace(/_/g, "/");
+  return Buffer.from(base64, "base64");
+}
+
+function findParts(payload, predicate, found = []) {
+  if (!payload) return found;
+  if (predicate(payload)) found.push(payload);
+  if (payload.parts) {
+    for (const part of payload.parts) findParts(part, predicate, found);
+  }
+  return found;
+}
+
+function headerValue(headers, name) {
+  const h = (headers || []).find((x) => x.name.toLowerCase() === name.toLowerCase());
+  return h?.value || null;
+}
+
+// Ruft Claude mit dem Mailtext (und PDF-Anhang, falls vorhanden) auf und laesst
+// strukturierte Rechnungsdaten als JSON extrahieren.
+async function extractInvoiceWithAI({ pdfBase64, emailText, subject, from, dateHeader }) {
+  const contentBlocks = [];
+  if (pdfBase64) {
+    contentBlocks.push({
+      type: "document",
+      source: { type: "base64", media_type: "application/pdf", data: pdfBase64 },
+    });
+  }
+  contentBlocks.push({
+    type: "text",
+    text: `Betreff: ${subject || "-"}\nVon: ${from || "-"}\nDatum: ${dateHeader || "-"}\n\nE-Mail-Text:\n${(
+      emailText || ""
+    ).slice(0, 6000)}\n\nPruefe, ob dies eine Rechnung/Quittung/Beleg ist (Kosten fuer den Betrieb oder eigene Erloes-Rechnung). Antworte AUSSCHLIESSLICH mit einem einzigen JSON-Objekt (kein Markdown, kein Codefence) mit exakt diesen Feldern:\n{"is_invoice": boolean, "direction": "in"|"out", "partner": string|null, "category": string|null, "invoice_number": string|null, "invoice_date": "YYYY-MM-DD"|null, "due_date": "YYYY-MM-DD"|null, "amount_gross": number|null, "amount_net": number|null, "vat_rate": number|null, "note": string|null}\ndirection ist "in" wenn es eine Kosten-Rechnung an uns ist, "out" wenn wir selbst eine Rechnung stellen. Wenn du dir bei einem Feld nicht sicher bist, setze null. Wenn dies klar KEINE Rechnung ist (z.B. Newsletter, Werbung, Terminbestaetigung ohne Betrag), setze is_invoice auf false.`,
+  });
+
+  const res = await fetch(ANTHROPIC_API, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": process.env.ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-5",
+      max_tokens: 1024,
+      messages: [{ role: "user", content: contentBlocks }],
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data?.error?.message || "Anthropic-API-Fehler");
+  }
+  const text = (data.content || []).map((b) => b.text || "").join("");
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error("Keine JSON-Antwort von der KI erhalten.");
+  return JSON.parse(jsonMatch[0]);
+}
+
+// Kernfunktion: durchsucht Gmail nach neuen Rechnungs-Mails, extrahiert sie per
+// KI und legt sie als Rechnungen an. Wird von der Route weiter unten UND vom
+// stuendlichen Timer in index.js aufgerufen - deshalb exportiert, kein direkter
+// Zugriff auf req/res.
+export async function scanInvoicesForAccount() {
+  if (!pool) return { connected: false, error: "Datenbank ist noch nicht verbunden." };
+  const account = await ensureGoogleAccount();
+  if (!account) return { connected: false, scanned: 0, imported: 0, skipped: 0 };
+  if (!googleEnvReady()) {
+    return {
+      connected: true,
+      error: "Google-Verbindung ist im Backend noch nicht konfiguriert.",
+      scanned: 0,
+      imported: 0,
+      skipped: 0,
+    };
+  }
+  if (!anthropicReady()) {
+    return {
+      connected: true,
+      error: "ANTHROPIC_API_KEY fehlt im Backend - KI-Auswertung ist nicht moeglich.",
+      scanned: 0,
+      imported: 0,
+      skipped: 0,
+    };
+  }
+
+  let accessToken;
+  try {
+    accessToken = await refreshAccessToken(account);
+  } catch (err) {
+    return { connected: true, error: err.message, scanned: 0, imported: 0, skipped: 0 };
+  }
+
+  const listRes = await fetch(`${GMAIL_API}/messages?q=${encodeURIComponent(INVOICE_QUERY)}&maxResults=25`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const listData = await listRes.json();
+  if (!listRes.ok) {
+    return {
+      connected: true,
+      error: listData?.error?.message || "Gmail-Suche fehlgeschlagen.",
+      scanned: 0,
+      imported: 0,
+      skipped: 0,
+    };
+  }
+  const messages = listData.messages || [];
+  if (messages.length === 0) {
+    return { connected: true, scanned: 0, imported: 0, skipped: 0 };
+  }
+
+  // Bereits importierte Mails vorab herausfiltern, damit keine unnoetigen (kostenpflichtigen)
+  // KI-Aufrufe fuer schon bekannte Nachrichten gemacht werden.
+  const ids = messages.map((m) => m.id);
+  const { rows: already } = await pool.query(
+    "SELECT source_message_id FROM invoices WHERE source_message_id = ANY($1)",
+    [ids]
+  );
+  const alreadyImported = new Set(already.map((r) => r.source_message_id));
+
+  let imported = 0;
+  let scanned = 0;
+  let skipped = 0;
+
+  for (const msg of messages) {
+    if (alreadyImported.has(msg.id)) continue;
+    scanned++;
+    try {
+      const msgRes = await fetch(`${GMAIL_API}/messages/${msg.id}?format=full`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const msgData = await msgRes.json();
+      if (!msgRes.ok) {
+        skipped++;
+        continue;
+      }
+
+      const headers = msgData.payload?.headers || [];
+      const subject = headerValue(headers, "Subject");
+      const from = headerValue(headers, "From");
+      const dateHeader = headerValue(headers, "Date");
+
+      const pdfParts = findParts(
+        msgData.payload,
+        (p) => p.mimeType === "application/pdf" && p.body?.attachmentId
+      );
+      let pdfBase64 = null;
+      if (pdfParts.length > 0) {
+        const attRes = await fetch(
+          `${GMAIL_API}/messages/${msg.id}/attachments/${pdfParts[0].body.attachmentId}`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        const attData = await attRes.json();
+        if (attRes.ok && attData.data) {
+          pdfBase64 = attData.data.replace(/-/g, "+").replace(/_/g, "/");
+        }
+      }
+
+      let emailText = "";
+      const textParts = findParts(msgData.payload, (p) => p.mimeType === "text/plain" && p.body?.data);
+      if (textParts.length > 0) {
+        emailText = base64UrlToBuffer(textParts[0].body.data).toString("utf-8");
+      } else if (!pdfBase64 && msgData.snippet) {
+        emailText = msgData.snippet;
+      }
+
+      const extracted = await extractInvoiceWithAI({ pdfBase64, emailText, subject, from, dateHeader });
+      if (!extracted.is_invoice) {
+        skipped++;
+        continue;
+      }
+
+      const fallbackDate = msgData.internalDate
+        ? new Date(Number(msgData.internalDate)).toISOString().slice(0, 10)
+        : new Date().toISOString().slice(0, 10);
+
+      const { rows } = await pool.query(
+        `INSERT INTO invoices
+           (direction, partner, category, invoice_number, invoice_date, due_date,
+            amount_gross, amount_net, vat_rate, status, note, source, source_message_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'offen',$10,'gmail-scan',$11)
+         ON CONFLICT (source_message_id) DO NOTHING
+         RETURNING id`,
+        [
+          extracted.direction === "out" ? "out" : "in",
+          extracted.partner || from || "Unbekannt",
+          extracted.category || null,
+          extracted.invoice_number || null,
+          extracted.invoice_date || fallbackDate,
+          extracted.due_date || null,
+          extracted.amount_gross ?? 0,
+          extracted.amount_net ?? extracted.amount_gross ?? 0,
+          extracted.vat_rate ?? 19,
+          extracted.note || `Automatisch aus Gmail importiert: "${subject || "(ohne Betreff)"}"`,
+          msg.id,
+        ]
+      );
+      if (rows[0]) imported++;
+      else skipped++;
+    } catch (err) {
+      console.error(`Fehler beim Scannen von Mail ${msg.id}:`, err.message);
+      skipped++;
+    }
+  }
+
+  return { connected: true, scanned, imported, skipped: skipped + alreadyImported.size };
+}
+
+router.post("/scan-invoices", async (_req, res) => {
+  const result = await scanInvoicesForAccount();
+  if (result.error) return res.status(503).json(result);
+  res.json(result);
+});
+
 export default router;
