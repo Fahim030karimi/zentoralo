@@ -7,6 +7,12 @@ import employeesRouter from "./routes/employees.js";
 import timetrackingRouter from "./routes/timetracking.js";
 import inventoryRouter from "./routes/inventory.js";
 import financeRouter from "./routes/finance.js";
+import invoicesRouter from "./routes/invoices.js";
+import cashbookRouter from "./routes/cashbook.js";
+import bankaccountsRouter from "./routes/bankaccounts.js";
+import upcomingRouter from "./routes/upcoming.js";
+import accountRouter from "./routes/account.js";
+import storeRouter from "./routes/store.js";
 import { pool } from "./db/pool.js";
 import { runMigrations } from "./db/migrate.js";
 
@@ -60,6 +66,12 @@ app.use("/api/employees", employeesRouter);
 app.use("/api/timetracking", timetrackingRouter);
 app.use("/api/inventory", inventoryRouter);
 app.use("/api/finance", financeRouter);
+app.use("/api/invoices", invoicesRouter);
+app.use("/api/cashbook", cashbookRouter);
+app.use("/api/bankaccounts", bankaccountsRouter);
+app.use("/api/upcoming", upcomingRouter);
+app.use("/api/account", accountRouter);
+app.use("/api/store", storeRouter);
 
 runMigrations(pool).finally(() => {
   app.listen(PORT, () => {
