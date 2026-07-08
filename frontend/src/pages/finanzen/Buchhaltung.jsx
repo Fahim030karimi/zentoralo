@@ -4,9 +4,10 @@ import { api } from "../../lib/api.js";
 // Finanzen > 3. Buchhaltung & Steuern. MwSt.-Aufschlüsselung wird echt aus den erfassten
 // Rechnungen (invoices) berechnet. Der Monatsabschluss-Status ist eine einfache, aber
 // echte Ableitung (laufender Monat = "In Prüfung", vergangene Monate = "Festgeschrieben") -
-// bis eine richtige GoBD-Festschreibung existiert. DATEV-/PDF-Export ist als Aktion
-// vorbereitet (Demo-Alert), da der eigentliche Datei-Export erst mit echter
-// Buchhaltungs-Anbindung sinnvoll ist.
+// bis eine richtige GoBD-Festschreibung existiert. DATEV-CSV-Export erzeugt eine echte
+// CSV-Datei aus den erfassten Rechnungen (Client-seitig, kein Server-Roundtrip nötig).
+// Kassenbuch-PDF nutzt den nativen Browser-Druckdialog ("Als PDF speichern"), damit kein
+// zusätzliches PDF-Paket ins Frontend-Bundle muss.
 export default function Buchhaltung() {
   const [invoices, setInvoices] = useState([]);
   const [monthly, setMonthly] = useState([]);
@@ -39,6 +40,97 @@ export default function Buchhaltung() {
 
   const currentMonthKey = new Date().toISOString().slice(0, 7);
   const missingDocs = invoices.filter((i) => i.direction === "in" && !i.note).length;
+
+  function exportDatevCsv() {
+    const header = [
+      "Belegdatum",
+      "Belegnummer",
+      "Partner",
+      "Kategorie",
+      "Netto (€)",
+      "MwSt-Satz (%)",
+      "MwSt (€)",
+      "Brutto (€)",
+      "Status",
+    ];
+    const rows = invoices
+      .slice()
+      .sort((a, b) => new Date(a.invoice_date) - new Date(b.invoice_date))
+      .map((inv) => [
+        inv.invoice_date?.slice(0, 10) || "",
+        inv.invoice_number || "",
+        inv.partner || "",
+        inv.category || "",
+        Number(inv.amount_net).toFixed(2),
+        Number(inv.vat_rate).toFixed(0),
+        (Number(inv.amount_gross) - Number(inv.amount_net)).toFixed(2),
+        Number(inv.amount_gross).toFixed(2),
+        inv.status || "",
+      ]);
+    const csv = [header, ...rows]
+      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(";"))
+      .join("\r\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `zentoralo-datev-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportKassenbuchPdf() {
+    const win = window.open("", "_blank");
+    if (!win) {
+      alert("Bitte Pop-ups für diese Seite erlauben, um den PDF-Export zu nutzen.");
+      return;
+    }
+    const rows = invoices
+      .slice()
+      .sort((a, b) => new Date(a.invoice_date) - new Date(b.invoice_date))
+      .map(
+        (inv) => `<tr>
+          <td>${inv.invoice_date?.slice(0, 10) || ""}</td>
+          <td>${inv.partner || ""}</td>
+          <td>${inv.invoice_number || ""}</td>
+          <td style="text-align:right">${Number(inv.amount_net).toFixed(2)} €</td>
+          <td style="text-align:right">${Number(inv.vat_rate).toFixed(0)}%</td>
+          <td style="text-align:right">${Number(inv.amount_gross).toFixed(2)} €</td>
+          <td>${inv.status || ""}</td>
+        </tr>`
+      )
+      .join("");
+    win.document.write(`
+      <html>
+        <head>
+          <title>Kassenbuch – Zentoralo</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 24px; color: #1e293b; }
+            h1 { font-size: 18px; margin-bottom: 4px; }
+            p.meta { font-size: 11px; color: #64748b; margin-top: 0; }
+            table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 11px; }
+            th, td { border-bottom: 1px solid #e2e8f0; padding: 6px 8px; text-align: left; }
+            th { background: #f8fafc; font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; color: #64748b; }
+          </style>
+        </head>
+        <body>
+          <h1>Kassenbuch – Zentoralo</h1>
+          <p class="meta">Erstellt am ${new Date().toLocaleDateString("de-DE")} · ${invoices.length} Belege</p>
+          <table>
+            <thead>
+              <tr><th>Datum</th><th>Partner</th><th>Belegnr.</th><th>Netto</th><th>MwSt.</th><th>Brutto</th><th>Status</th></tr>
+            </thead>
+            <tbody>${rows || '<tr><td colspan="7">Keine Belege vorhanden.</td></tr>'}</tbody>
+          </table>
+        </body>
+      </html>
+    `);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 300);
+  }
 
   return (
     <div className="space-y-6">
@@ -83,14 +175,16 @@ export default function Buchhaltung() {
         </div>
         <div className="flex flex-wrap gap-2 w-full md:w-auto">
           <button
-            onClick={() => alert("PDF-Export folgt mit der finalen Buchhaltungs-Anbindung.")}
-            className="flex-1 md:flex-initial bg-white/10 hover:bg-white/15 border border-white/10 premium-transit text-xs font-semibold px-4 py-2.5 rounded-xl"
+            onClick={exportKassenbuchPdf}
+            disabled={invoices.length === 0}
+            className="flex-1 md:flex-initial bg-white/10 hover:bg-white/15 border border-white/10 premium-transit text-xs font-semibold px-4 py-2.5 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed"
           >
             📥 Kassenbuch (PDF)
           </button>
           <button
-            onClick={() => alert("DATEV-CSV-Export folgt mit der finalen Buchhaltungs-Anbindung.")}
-            className="flex-1 md:flex-initial bg-indigo-600 hover:bg-indigo-500 premium-transit text-xs font-semibold px-4 py-2.5 rounded-xl shadow-md shadow-indigo-600/10"
+            onClick={exportDatevCsv}
+            disabled={invoices.length === 0}
+            className="flex-1 md:flex-initial bg-indigo-600 hover:bg-indigo-500 premium-transit text-xs font-semibold px-4 py-2.5 rounded-xl shadow-md shadow-indigo-600/10 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             ⚡ DATEV-Export (.csv)
           </button>
