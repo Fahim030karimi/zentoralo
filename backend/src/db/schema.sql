@@ -175,3 +175,13 @@ CREATE TABLE IF NOT EXISTS google_accounts (
   token_expiry TIMESTAMPTZ,
   connected_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Phase 1 (Fortsetzung): Automatischer Gmail-Rechnungsscan mit KI-Extraktion.
+-- source unterscheidet manuell erfasste von automatisch importierten Rechnungen;
+-- source_message_id (Gmail-Message-ID) verhindert per Unique-Index, dass dieselbe
+-- Mail zweimal importiert wird (stuendlicher Hintergrund-Scan + manueller Button
+-- koennten sich sonst ueberschneiden).
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'manuell';
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS source_message_id TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS invoices_source_message_id_key
+  ON invoices (source_message_id) WHERE source_message_id IS NOT NULL;
