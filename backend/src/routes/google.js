@@ -146,7 +146,11 @@ router.post("/disconnect", async (_req, res) => {
 
 const GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me";
 const ANTHROPIC_API = "https://api.anthropic.com/v1/messages";
-const INVOICE_QUERY = "(rechnung OR invoice OR quittung OR beleg) has:attachment newer_than:90d";
+// Bewusst OHNE "has:attachment": Erloes-/Auszahlungsberichte (z.B. Wolt/Lieferando/Uber Eats
+// Payout-Reports) kommen oft als reiner HTML-Mailtext ohne PDF-Anhang. extractInvoiceWithAI
+// liest in diesem Fall den Mailtext (emailText) statt eines PDFs - siehe scanInvoicesForAccount.
+const INVOICE_QUERY =
+  "(rechnung OR invoice OR quittung OR beleg OR auszahlung OR payout OR abrechnung OR gutschrift OR provisionsabrechnung) newer_than:90d";
 
 function anthropicReady() {
   return Boolean(process.env.ANTHROPIC_API_KEY);
@@ -219,7 +223,7 @@ async function extractInvoiceWithAI({ pdfBase64, emailText, subject, from, dateH
     type: "text",
     text: `Betreff: ${subject || "-"}\nVon: ${from || "-"}\nDatum: ${dateHeader || "-"}\n\nE-Mail-Text:\n${(
       emailText || ""
-    ).slice(0, 6000)}\n\nPruefe, ob dies eine Rechnung/Quittung/Beleg ist (Kosten fuer den Betrieb oder eigene Erloes-Rechnung). Antworte AUSSCHLIESSLICH mit einem einzigen JSON-Objekt (kein Markdown, kein Codefence) mit exakt diesen Feldern:\n{"is_invoice": boolean, "direction": "in"|"out", "partner": string|null, "category": string|null, "invoice_number": string|null, "invoice_date": "YYYY-MM-DD"|null, "due_date": "YYYY-MM-DD"|null, "amount_gross": number|null, "amount_net": number|null, "vat_rate": number|null, "note": string|null}\ndirection ist "in" wenn es eine Kosten-Rechnung an uns ist, "out" wenn wir selbst eine Rechnung stellen. Wenn du dir bei einem Feld nicht sicher bist, setze null. Wenn dies klar KEINE Rechnung ist (z.B. Newsletter, Werbung, Terminbestaetigung ohne Betrag), setze is_invoice auf false.`,
+    ).slice(0, 6000)}\n\nPruefe, ob dies eines der folgenden ist: (a) eine Kosten-Rechnung/Quittung/Beleg an uns, (b) eine eigene Erloes-Rechnung, oder (c) ein Auszahlungs-/Provisions-/Abrechnungsbericht einer Lieferplattform oder eines Zahlungsdienstleisters (z.B. Wolt, Lieferando, Uber Eats, Stripe, SumUp - diese zaehlen als Erloes/Einnahme). Antworte AUSSCHLIESSLICH mit einem einzigen JSON-Objekt (kein Markdown, kein Codefence) mit exakt diesen Feldern:\n{"is_invoice": boolean, "direction": "in"|"out", "partner": string|null, "category": string|null, "invoice_number": string|null, "invoice_date": "YYYY-MM-DD"|null, "due_date": "YYYY-MM-DD"|null, "amount_gross": number|null, "amount_net": number|null, "vat_rate": number|null, "note": string|null}\ndirection ist "in" wenn es eine Kosten-Rechnung an uns ist, "out" wenn es sich um eigene Erloese handelt (eigene Rechnung ODER Auszahlungs-/Payout-Bericht einer Plattform). Bei Auszahlungsberichten: amount_gross/amount_net = der ausgezahlte bzw. abgerechnete Betrag, category = "Erloes Lieferplattform" o.ae. Wenn du dir bei einem Feld nicht sicher bist, setze null. Wenn dies klar KEINE Rechnung/Kein Beleg/Kein Auszahlungsbericht ist (z.B. Newsletter, Werbung, Terminbestaetigung ohne Betrag), setze is_invoice auf false.`,
   });
 
   const res = await fetch(ANTHROPIC_API, {
