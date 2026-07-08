@@ -77,3 +77,87 @@ CREATE TABLE IF NOT EXISTS monthly_finance (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (month)
 );
+
+-- Phase 6 MVP: Finanzen-Deep-Dive (Rechnungen, Tresor/Kassenbuch, Cashflow) sowie
+-- Konten-/Store-Profil fuer die neue Einstellungen-Struktur. Noch ohne owner_user_id -
+-- TODO: sobald echtes Login im Frontend verdrahtet ist, hier auf Mandantentrennung umstellen.
+
+-- 2. Rechnungen (In & Out) - Lieferanten-Kosten und eigene Erloes-Rechnungen
+CREATE TABLE IF NOT EXISTS invoices (
+  id SERIAL PRIMARY KEY,
+  direction TEXT NOT NULL DEFAULT 'in', -- 'in' = Kosten/Eingang, 'out' = Erloes/Ausgang
+  partner TEXT NOT NULL,
+  category TEXT,
+  invoice_number TEXT,
+  invoice_date DATE NOT NULL,
+  due_date DATE,
+  amount_gross NUMERIC NOT NULL DEFAULT 0,
+  amount_net NUMERIC NOT NULL DEFAULT 0,
+  vat_rate NUMERIC NOT NULL DEFAULT 19,
+  status TEXT NOT NULL DEFAULT 'offen', -- 'offen' | 'bezahlt' | 'ueberfaellig'
+  note TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 4. Tresor & Kassenbestand - Live-Salden (Singleton-Zeile) + chronologisches Kassenbuch
+CREATE TABLE IF NOT EXISTS cash_state (
+  id SERIAL PRIMARY KEY,
+  main_safe_balance NUMERIC NOT NULL DEFAULT 0,
+  circulating_balance NUMERIC NOT NULL DEFAULT 0,
+  change_reserve NUMERIC NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS cash_movements (
+  id SERIAL PRIMARY KEY,
+  movement_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  movement_type TEXT NOT NULL DEFAULT 'zaehlung', -- 'zaehlung' | 'transit'
+  target_amount NUMERIC,
+  actual_amount NUMERIC,
+  note TEXT,
+  responsible TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 5. Cashflow & Liquiditaet - angebundene Konten + erwartete Grossbuchungen
+CREATE TABLE IF NOT EXISTS bank_accounts (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  iban TEXT,
+  purpose TEXT,
+  balance NUMERIC NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS upcoming_transactions (
+  id SERIAL PRIMARY KEY,
+  expected_date DATE NOT NULL,
+  category TEXT NOT NULL,
+  transaction_type TEXT NOT NULL DEFAULT 'expense', -- 'income' | 'expense'
+  priority TEXT NOT NULL DEFAULT 'mittel', -- 'niedrig' | 'mittel' | 'hoch'
+  amount NUMERIC NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Einstellungen: Konto-Profil (Login-Daten des Inhabers) und Store-Profil (Stammdaten +
+-- Controlling-Vorgaben). Bewusst als Singleton (eine Zeile) angelegt, bis echtes
+-- Multi-User-Login existiert.
+CREATE TABLE IF NOT EXISTS account_profile (
+  id SERIAL PRIMARY KEY,
+  full_name TEXT NOT NULL DEFAULT 'Geschäftsleitung',
+  email TEXT NOT NULL DEFAULT 'inhaber@zentoralo.com',
+  password_hash TEXT,
+  phone TEXT,
+  two_factor_enabled BOOLEAN NOT NULL DEFAULT false,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS store_profile (
+  id SERIAL PRIMARY KEY,
+  store_name TEXT NOT NULL DEFAULT 'Zentoralo Gastro Hub',
+  address TEXT,
+  target_food_cost_percent NUMERIC NOT NULL DEFAULT 25,
+  loss_surcharge_percent NUMERIC NOT NULL DEFAULT 2,
+  backup_frequency TEXT NOT NULL DEFAULT 'stuendlich',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
