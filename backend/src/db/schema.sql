@@ -191,3 +191,24 @@ ALTER TABLE invoices ADD COLUMN IF NOT EXISTS source_message_id TEXT;
 DROP INDEX IF EXISTS invoices_source_message_id_key;
 CREATE UNIQUE INDEX IF NOT EXISTS invoices_source_message_id_key
   ON invoices (source_message_id);
+
+-- Phase 3 (Rezepte): echte Persistenz fuer den Rezeptur-Rechner in Werkzeuge. Zutatenpreise
+-- werden beim Speichern aus inventory_items uebernommen und als Snapshot abgelegt, damit
+-- bereits gespeicherte Rezepte stabil bleiben, auch wenn sich Lagerpreise spaeter aendern.
+CREATE TABLE IF NOT EXISTS recipes (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  sale_price_gross NUMERIC NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS recipe_ingredients (
+  id SERIAL PRIMARY KEY,
+  recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+  inventory_item_id INTEGER REFERENCES inventory_items(id),
+  name_snapshot TEXT NOT NULL,
+  unit TEXT NOT NULL DEFAULT 'Stk',
+  quantity NUMERIC NOT NULL DEFAULT 0,
+  price_per_unit_snapshot NUMERIC NOT NULL DEFAULT 0
+);
